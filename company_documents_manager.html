@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company Documents Manager</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [v-cloak] { display: none !important; }
+    @media print {
+      body * { visibility: hidden; }
+      #printable-area, #printable-area * { visibility: visible; }
+      #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="h-full font-sans antialiased text-slate-800">
+  <div id="app" v-cloak class="min-h-full flex flex-col">
+    
+    <!-- PIN LOGIN SCREEN -->
+    <div v-if="!isAuthenticated" class="min-h-screen flex items-center justify-center bg-slate-900 px-4">
+      <div class="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6 border border-slate-100">
+        <div class="text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-50 text-brand-600 mb-4">
+            <i data-lucide="lock" class="w-8 h-8"></i>
+          </div>
+          <h2 class="text-2xl font-bold text-slate-900">Documents Manager</h2>
+          <p class="text-sm text-slate-500 mt-1">Enter PIN to access system (Default: 1234)</p>
+        </div>
+        <form @submit.prevent="verifyPin" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Security PIN</label>
+            <input type="password" maxlength="6" v-model="pinInput" autofocus placeholder="••••" class="w-full text-center text-2xl tracking-widest px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          </div>
+          <p v-if="loginError" class="text-xs text-red-500 text-center font-medium">{{ loginError }}</p>
+          <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition shadow-lg shadow-brand-600/30">
+            Unlock Application
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MAIN APP WRAPPER -->
+    <div v-else class="flex-1 flex flex-col md:flex-row min-h-screen">
+      
+      <!-- SIDEBAR -->
+      <aside class="w-full md:w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col">
+        <!-- App Title & Switcher -->
+        <div class="p-4 border-b border-slate-800">
+          <div class="flex items-center space-x-3 mb-4">
+            <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-lg">
+              Doc
+            </div>
+            <div>
+              <h1 class="font-bold text-white leading-none">DocManager</h1>
+              <span class="text-xs text-slate-400">Enterprise Edition</span>
+            </div>
+          </div>
+
+          <!-- Active Company Selector -->
+          <div>
+            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Active Business</label>
+            <select v-model="activeCompanyId" class="w-full text-sm bg-slate-800 text-white rounded-lg p-2 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+          <button @click="currentView = 'dashboard'" :class="navClass('dashboard')" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            <span>Dashboard & P&L</span>
+          </button>
+
+          <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase text-slate-400">Documents</div>
+          <button @click="currentView = 'quotations'" :class="navClass('quotations')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="file-text" class="w-4 h-4"></i><span>Quotations</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('quotations').length }}</span>
+          </button>
+          <button @click="currentView = 'invoices'" :class="navClass('invoices')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="receipt" class="w-4 h-4"></i><span>Invoices</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('invoices').length }}</span>
+          </button>
+          <button @click="currentView = 'proformas'" :class="navClass('proformas')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="files" class="w-4 h-4"></i><span>Proforma Invoices</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('proformas').length }}</span>
+          </button>
+          <button @click="currentView = 'purchase_orders'" :class="navClass('purchase_orders')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="shopping-bag" class="w-4 h-4"></i><span>Purchase Orders</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('purchase_orders').length }}</span>
+          </button>
+          <button @click="currentView = 'delivery_notes'" :class="navClass('delivery_notes')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="truck" class="w-4 h-4"></i><span>Delivery Notes</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('delivery_notes').length }}</span>
+          </button>
+          <button @click="currentView = 'receipts'" :class="navClass('receipts')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="credit-card" class="w-4 h-4"></i><span>Receipts</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('receipts').length }}</span>
+          </button>
+          <button @click="currentView = 'letters'" :class="navClass('letters')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+            <span class="flex items-center space-x-3"><i data-lucide="mail" class="w-4 h-4"></i><span>Official Letters</span></span>
+            <span class="bg-slate-800 text-xs px-2 py-0.5 rounded-full">{{ activeDocs('letters').length }}</span>
+          </button>
+
+          <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase text-slate-400">Management & Settings</div>
+          <button @click="currentView = 'expenses'" :class="navClass('expenses')" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition">
+            <i data-lucide="wallet" class="w-4 h-4"></i>
+            <span>Expenses</span>
+          </button>
+          <button @click="currentView = 'customers'" :class="navClass('customers')" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            <span>Customers</span>
+          </button>
+          <button @click="currentView = 'products'" :class="navClass('products')" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition">
+            <i data-lucide="box" class="w-4 h-4"></i>
+            <span>Products & Items</span>
+          </button>
+          <button @click="currentView = 'settings'" :class="navClass('settings')" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            <span>Company Settings</span>
+          </button>
+          <button @click="currentView = 'companies'" :class="navClass('companies')" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition">
+            <i data-lucide="building" class="w-4 h-4"></i>
+            <span>Manage Companies</span>
+          </button>
+        </nav>
+
+        <!-- User Logout Footer -->
+        <div class="p-4 border-t border-slate-800 flex items-center justify-between">
+          <div class="text-xs text-slate-400">PIN Authorized</div>
+          <button @click="isAuthenticated = false" class="text-xs text-red-400 hover:text-red-300 font-medium">Logout</button>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT VIEW -->
+      <main class="flex-1 bg-slate-50 overflow-y-auto p-4 md:p-8">
+
+        <!-- FINANCIAL DASHBOARD & P&L VIEW -->
+        <div v-if="currentView === 'dashboard'" class="space-y-6">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900">{{ currentCompany.name }}</h1>
+              <p class="text-sm text-slate-500">Financial Summary & Statement of Comprehensive Income</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-semibold text-slate-500">Fiscal Year:</span>
+              <select v-model="selectedFiscalYear" class="bg-white border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:outline-none">
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- KPI STAT CARDS -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <span class="text-xs font-semibold text-slate-400 uppercase">Total Sales Revenue</span>
+              <div class="text-2xl font-bold text-slate-900 mt-1">{{ formatCurrency(financials.sales) }}</div>
+              <span class="text-xs text-emerald-600 font-medium">Invoices & Receipts</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <span class="text-xs font-semibold text-slate-400 uppercase">Cost of Sales</span>
+              <div class="text-2xl font-bold text-slate-900 mt-1">{{ formatCurrency(financials.costOfSales) }}</div>
+              <span class="text-xs text-amber-600 font-medium">Purchase Orders</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <span class="text-xs font-semibold text-slate-400 uppercase">Operating Expenses</span>
+              <div class="text-2xl font-bold text-slate-900 mt-1">{{ formatCurrency(financials.expenses) }}</div>
+              <span class="text-xs text-rose-600 font-medium">Recorded Expenses</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <span class="text-xs font-semibold text-slate-400 uppercase">Net Profit Before Tax</span>
+              <div class="text-2xl font-bold text-brand-600 mt-1">{{ formatCurrency(financials.netProfit) }}</div>
+              <span class="text-xs text-slate-500 font-medium">Gross Profit - Expenses</span>
+            </div>
+          </div>
+
+          <!-- STATEMENT OF COMPREHENSIVE INCOME (P&L TABLE) -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div>
+                <h2 class="text-lg font-bold text-slate-900">Statement of Comprehensive Income</h2>
+                <p class="text-xs text-slate-500">For the fiscal year ended 31st December {{ selectedFiscalYear }}</p>
+              </div>
+              <button @click="window.print()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-lg transition">Export Summary</button>
+            </div>
+
+            <div class="divide-y divide-slate-100 text-sm">
+              <div class="py-3 flex justify-between font-semibold text-slate-800">
+                <span>Revenue / Sales (Invoices & Paid Receipts)</span>
+                <span>{{ formatCurrency(financials.sales) }}</span>
+              </div>
+              <div class="py-3 flex justify-between text-slate-600 pl-4">
+                <span>Less: Cost of Sales (Purchase Orders)</span>
+                <span>({{ formatCurrency(financials.costOfSales) }})</span>
+              </div>
+              <div class="py-3 flex justify-between font-bold text-slate-900 bg-slate-50 px-3 rounded-lg">
+                <span>Gross Profit</span>
+                <span>{{ formatCurrency(financials.grossProfit) }}</span>
+              </div>
+              <div class="py-3 space-y-2">
+                <div class="font-semibold text-slate-700">Less: Operating Expenses</div>
+                <div v-for="(amt, cat) in financials.expenseBreakdown" :key="cat" class="flex justify-between text-xs text-slate-500 pl-4">
+                  <span>{{ cat }}</span>
+                  <span>{{ formatCurrency(amt) }}</span>
+                </div>
+              </div>
+              <div class="py-3 flex justify-between font-bold text-brand-700 bg-brand-50 px-3 rounded-lg text-base">
+                <span>Net Profit Before Taxes</span>
+                <span>{{ formatCurrency(financials.netProfit) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DOCUMENT LIST / GENERATOR VIEWS -->
+        <div v-if="['quotations', 'invoices', 'proformas', 'purchase_orders', 'delivery_notes', 'receipts', 'letters'].includes(currentView)" class="space-y-6">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900 capitalize">{{ currentView.replace('_', ' ') }}</h1>
+              <p class="text-sm text-slate-500">Manage and issue official documents for {{ currentCompany.name }}</p>
+            </div>
+            <button @click="openCreateModal(currentView)" class="flex items-center space-x-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-md transition">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Create New {{ documentTypeName(currentView) }}</span>
+            </button>
+          </div>
+
+          <!-- DOCUMENT LIST TABLE -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase font-semibold text-slate-500">
+                  <th class="p-4">Number</th>
+                  <th class="p-4">Date</th>
+                  <th class="p-4">Customer / Recipient</th>
+                  <th class="p-4" v-if="currentView !== 'delivery_notes' && currentView !== 'letters'">Total</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="doc in activeDocs(currentView)" :key="doc.id" class="hover:bg-slate-50/50 transition">
+                  <td class="p-4 font-semibold text-brand-600">{{ doc.docNumber }}</td>
+                  <td class="p-4 text-slate-600">{{ doc.date }}</td>
+                  <td class="p-4 font-medium text-slate-900">{{ doc.customerName || doc.to || 'N/A' }}</td>
+                  <td class="p-4 font-semibold" v-if="currentView !== 'delivery_notes' && currentView !== 'letters'">
+                    {{ formatCurrency(doc.grandTotal || doc.amountPaid || 0) }}
+                  </td>
+                  <td class="p-4">
+                    <span :class="statusBadgeClass(doc.status)" class="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      {{ doc.status || 'Final' }}
+                    </span>
+                  </td>
+                  <td class="p-4 text-right space-x-2">
+                    <button @click="previewDocument(doc)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition">View / Print</button>
+                    <!-- Conversion Shortcuts -->
+                    <button v-if="currentView === 'quotations'" @click="convertQuotationToInvoice(doc)" class="text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg font-medium transition">Convert to Inv</button>
+                    <button v-if="['invoices', 'proformas'].includes(currentView)" @click="generateReceiptFromInvoice(doc)" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg font-medium transition">Create Receipt</button>
+                    <button @click="deleteDoc(doc.id)" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                  </td>
+                </tr>
+                <tr v-if="activeDocs(currentView).length === 0">
+                  <td colspan="6" class="p-8 text-center text-slate-400">No {{ currentView.replace('_', ' ') }} created yet. Click "Create New" to begin.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- EXPENSES MANAGEMENT -->
+        <div v-if="currentView === 'expenses'" class="space-y-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900">Expense Tracker</h1>
+              <p class="text-sm text-slate-500">Record operational expenditures for P&L Statements</p>
+            </div>
+            <button @click="showExpenseModal = true" class="bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl shadow transition">Record Expense</button>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="p-4">Date</th>
+                  <th class="p-4">Category</th>
+                  <th class="p-4">Description</th>
+                  <th class="p-4 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="exp in activeCompany.expenses" :key="exp.id">
+                  <td class="p-4 text-slate-600">{{ exp.date }}</td>
+                  <td class="p-4 font-semibold text-slate-800">{{ exp.category }}</td>
+                  <td class="p-4 text-slate-600">{{ exp.notes || '-' }}</td>
+                  <td class="p-4 text-right font-bold text-slate-900">{{ formatCurrency(exp.amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- CUSTOMERS MANAGEMENT -->
+        <div v-if="currentView === 'customers'" class="space-y-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900">Customers Database</h1>
+              <p class="text-sm text-slate-500">Pre-saved customer profiles for document creation</p>
+            </div>
+            <button @click="showCustomerModal = true" class="bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl shadow transition">Add Customer</button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-for="c in activeCompany.customers" :key="c.id" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+              <h3 class="font-bold text-slate-900 text-base">{{ c.companyName || c.name }}</h3>
+              <p class="text-xs text-slate-500" v-if="c.name && c.companyName">Contact: {{ c.name }}</p>
+              <div class="text-xs text-slate-600 space-y-1 pt-2 border-t border-slate-100">
+                <p><strong>Email:</strong> {{ c.email }}</p>
+                <p><strong>Phone:</strong> {{ c.mobile }}</p>
+                <p><strong>TIN:</strong> {{ c.tin || 'N/A' }}</p>
+                <p><strong>Address:</strong> {{ c.address }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRODUCTS MANAGEMENT -->
+        <div v-if="currentView === 'products'" class="space-y-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900">Product & Item Catalog</h1>
+              <p class="text-sm text-slate-500">Master inventory items with pricing and tax rates</p>
+            </div>
+            <button @click="showProductModal = true" class="bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl shadow transition">Add Product</button>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="p-4">Item Name</th>
+                  <th class="p-4">HSN</th>
+                  <th class="p-4">UOM</th>
+                  <th class="p-4">Price</th>
+                  <th class="p-4">GST %</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="p in activeCompany.products" :key="p.id">
+                  <td class="p-4 font-semibold text-slate-900">{{ p.name }}</td>
+                  <td class="p-4 text-slate-500">{{ p.hsn || '-' }}</td>
+                  <td class="p-4 text-slate-500">{{ p.uom || 'PCS' }}</td>
+                  <td class="p-4 font-bold text-slate-800">{{ formatCurrency(p.price) }}</td>
+                  <td class="p-4 text-slate-600">{{ p.taxRate }}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- COMPANY SETTINGS VIEW -->
+        <div v-if="currentView === 'settings'" class="max-w-4xl space-y-6">
+          <div>
+            <h1 class="text-2xl font-bold text-slate-900">Company Settings</h1>
+            <p class="text-sm text-slate-500">Configure business information, prefixes, and display preferences for {{ activeCompany.name }}</p>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+            <h3 class="text-base font-bold text-slate-900 border-b pb-2">1. Business & Tax Information</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Company / Business Name</label>
+                <input v-model="activeCompany.name" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Contact Person Name</label>
+                <input v-model="activeCompany.contactName" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
+                <input v-model="activeCompany.email" type="email" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Mobile Phone</label>
+                <input v-model="activeCompany.mobile" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Address</label>
+                <textarea v-model="activeCompany.address" rows="2" class="w-full text-sm border border-slate-300 rounded-lg p-2.5"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">GST / Tax Number</label>
+                <input v-model="activeCompany.gstNo" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Company Reg Number</label>
+                <input v-model="activeCompany.regNo" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+            </div>
+
+            <h3 class="text-base font-bold text-slate-900 border-b pb-2 pt-4">2. Bank & Payment Details</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Bank Name</label>
+                <input v-model="activeCompany.bankName" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Account Name</label>
+                <input v-model="activeCompany.accountName" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Account Number</label>
+                <input v-model="activeCompany.accountNumber" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+            </div>
+
+            <h3 class="text-base font-bold text-slate-900 border-b pb-2 pt-4">3. Document Serial & Prefixes</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Quotation Prefix</label>
+                <input v-model="activeCompany.prefixes.quotation" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 border-slate-300">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice Prefix</label>
+                <input v-model="activeCompany.prefixes.invoice" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Proforma Prefix</label>
+                <input v-model="activeCompany.prefixes.proforma" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">PO Prefix</label>
+                <input v-model="activeCompany.prefixes.po" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2">
+              </div>
+            </div>
+
+            <div class="pt-4 flex justify-end">
+              <button @click="saveSettings" class="bg-brand-600 text-white font-semibold px-6 py-2.5 rounded-xl shadow-md">Save Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MANAGE COMPANIES VIEW -->
+        <div v-if="currentView === 'companies'" class="space-y-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-900">Manage Companies</h1>
+              <p class="text-sm text-slate-500">Create and switch between multi-company profiles</p>
+            </div>
+            <button @click="showAddCompanyModal = true" class="bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl shadow transition">Add New Company</button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="comp in companies" :key="comp.id" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900">{{ comp.name }}</h3>
+                <p class="text-xs text-slate-500">Reg: {{ comp.regNo || 'N/A' }} | GST: {{ comp.gstNo || 'N/A' }}</p>
+              </div>
+              <div class="space-x-2">
+                <button @click="activeCompanyId = comp.id" class="text-xs bg-brand-50 text-brand-700 font-semibold px-3 py-1.5 rounded-lg">Switch To</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- DOCUMENT CREATION / EDIT MODAL -->
+    <div v-if="showDocModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h2 class="font-bold text-slate-900 text-lg">Create {{ documentTypeName(newDoc.type) }}</h2>
+          <button @click="showDocModal = false" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+
+        <div class="p-6 overflow-y-auto space-y-6 flex-1">
+          <!-- TOP FORM ROW -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Select Customer</label>
+              <select v-model="newDoc.customerId" @change="onCustomerSelect" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+                <option value="">-- Choose Pre-added Customer --</option>
+                <option v-for="c in activeCompany.customers" :key="c.id" :value="c.id">{{ c.companyName || c.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+              <input v-model="newDoc.date" type="date" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Document Status</label>
+              <select v-model="newDoc.status" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+                <option value="Approved">Approved / Paid</option>
+                <option value="In-Progress">In-Progress / Unpaid</option>
+                <option value="Draft">Draft</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- CUSTOM FIELDS (Ref, Validity, PO Num) -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Reference No (Ref:)</label>
+              <input v-model="newDoc.refNo" type="text" placeholder="e.g. PR 1000001570" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Validity Period</label>
+              <input v-model="newDoc.validity" type="text" placeholder="e.g. 10 Days" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">PO Number</label>
+              <input v-model="newDoc.poNumber" type="text" placeholder="e.g. PO-9921" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+          </div>
+
+          <!-- SPECIAL FORM FOR RECEIPTS -->
+          <div v-if="newDoc.type === 'receipts'" class="bg-amber-50 p-4 rounded-xl space-y-4 border border-amber-200">
+            <h4 class="font-bold text-amber-900 text-sm">Receipt Payment Info</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Payment Method</label>
+                <select v-model="newDoc.paymentMethod" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+                  <option value="Bank">Bank Transfer</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Cheque">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Payment Reference No</label>
+                <input v-model="newDoc.paymentRef" type="text" placeholder="e.g. FT24205D7RRK" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Amount Paid ({{ activeCompany.currency }})</label>
+                <input v-model.number="newDoc.amountPaid" type="number" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+              </div>
+            </div>
+          </div>
+
+          <!-- LINE ITEMS TABLE (FOR ITEMS BASED DOCUMENTS) -->
+          <div v-if="newDoc.type !== 'receipts' && newDoc.type !== 'letters'" class="space-y-3">
+            <div class="flex justify-between items-center">
+              <h4 class="font-bold text-slate-900 text-sm">Line Items</h4>
+              <button @click="addLineItem" class="text-xs bg-slate-100 hover:bg-slate-200 font-semibold px-3 py-1.5 rounded-lg">+ Add Custom Item</button>
+            </div>
+
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100 text-slate-600 font-semibold uppercase">
+                <tr>
+                  <th class="p-2">Description / Product</th>
+                  <th class="p-2 w-20">Qty</th>
+                  <th class="p-2 w-28" v-if="newDoc.type !== 'delivery_notes'">Unit Price</th>
+                  <th class="p-2 w-24" v-if="newDoc.type !== 'delivery_notes'">GST %</th>
+                  <th class="p-2 w-28 text-right" v-if="newDoc.type !== 'delivery_notes'">Total</th>
+                  <th class="p-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="(item, idx) in newDoc.items" :key="idx">
+                  <td class="p-2">
+                    <select v-model="item.productId" @change="onProductSelect(item)" class="w-full border border-slate-300 rounded p-1.5 mb-1">
+                      <option value="">-- Choose Catalog Product --</option>
+                      <option v-for="p in activeCompany.products" :key="p.id" :value="p.id">{{ p.name }}</option>
+                    </select>
+                    <input v-model="item.description" type="text" placeholder="Item description" class="w-full border border-slate-200 rounded p-1 text-xs">
+                  </td>
+                  <td class="p-2"><input v-model.number="item.qty" type="number" min="1" class="w-full border border-slate-300 rounded p-1 text-center"></td>
+                  <td class="p-2" v-if="newDoc.type !== 'delivery_notes'"><input v-model.number="item.price" type="number" class="w-full border border-slate-300 rounded p-1"></td>
+                  <td class="p-2" v-if="newDoc.type !== 'delivery_notes'"><input v-model.number="item.taxRate" type="number" class="w-full border border-slate-300 rounded p-1"></td>
+                  <td class="p-2 text-right font-semibold" v-if="newDoc.type !== 'delivery_notes'">
+                    {{ formatCurrency((item.qty * item.price) * (1 + (item.taxRate || 0)/100)) }}
+                  </td>
+                  <td class="p-2 text-center"><button @click="removeLineItem(idx)" class="text-red-500 font-bold">×</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- LETTERHEAD FORM FOR OFFICIAL LETTERS -->
+          <div v-if="newDoc.type === 'letters'" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Recipient (To:)</label>
+              <input v-model="newDoc.to" type="text" placeholder="e.g. Managing Director, Ministry of Finance" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">CC Copy (Copy:)</label>
+              <input v-model="newDoc.cc" type="text" placeholder="e.g. Operations Manager, HR Department" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Subject</label>
+              <input v-model="newDoc.subject" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Letter Body Content</label>
+              <textarea v-model="newDoc.body" rows="6" class="w-full text-sm border border-slate-300 rounded-lg p-2.5"></textarea>
+            </div>
+          </div>
+
+          <!-- TERMS AND CONDITIONS SELECTION -->
+          <div v-if="newDoc.type !== 'letters'" class="space-y-2">
+            <label class="block text-xs font-semibold text-slate-600">Terms & Conditions</label>
+            <textarea v-model="newDoc.terms" rows="3" class="w-full text-xs border border-slate-300 rounded-lg p-2.5"></textarea>
+          </div>
+
+        </div>
+
+        <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+          <div class="text-sm font-bold text-slate-800" v-if="newDoc.type !== 'delivery_notes' && newDoc.type !== 'letters'">
+            Grand Total: <span class="text-brand-600 text-lg">{{ formatCurrency(calculatedTotal) }}</span>
+          </div>
+          <div class="space-x-2">
+            <button @click="showDocModal = false" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
+            <button @click="saveDocument" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-xs shadow-md">Generate Document</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOCUMENT PRINT / PREVIEW MODAL (Strictly matching sample layout in PDF) -->
+    <div v-if="showPreviewModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl overflow-hidden flex flex-col">
+        <!-- Action Toolbar -->
+        <div class="no-print p-4 bg-slate-800 text-white flex justify-between items-center">
+          <div class="text-sm font-semibold">Document Preview: {{ activePreviewDoc.docNumber }}</div>
+          <div class="space-x-2">
+            <button @click="triggerPrint" class="bg-brand-600 hover:bg-brand-500 px-4 py-1.5 rounded-lg text-xs font-bold shadow">Print / Export PDF</button>
+            <button @click="showPreviewModal = false" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-xs">Close</button>
+          </div>
+        </div>
+
+        <!-- PRINTABLE AREA CONTENT -->
+        <div id="printable-area" class="p-8 text-slate-900 font-sans text-xs leading-relaxed space-y-6">
+          
+          <!-- LETTERHEAD TOP BANNER (FOR LETTERS) -->
+          <div v-if="activePreviewDoc.type === 'letters'" class="border-b-2 border-slate-800 pb-4 text-center">
+            <h1 class="text-2xl font-bold uppercase tracking-wider text-slate-900">{{ activeCompany.name }}</h1>
+            <p class="text-xs text-slate-600">{{ activeCompany.address }} | Phone: {{ activeCompany.mobile }} | Email: {{ activeCompany.email }}</p>
+          </div>
+
+          <!-- DOCUMENT HEADER (Standard Specs) -->
+          <div v-else class="flex justify-between items-start border-b border-slate-200 pb-4">
+            <div>
+              <h2 class="text-xl font-bold uppercase tracking-tight text-slate-900">{{ activeCompany.name }}</h2>
+              <p class="text-slate-600 font-medium">{{ activeCompany.contactName }}</p>
+              <p class="text-slate-500 whitespace-pre-line">{{ activeCompany.address }}</p>
+              <p class="text-slate-500">Tel: {{ activeCompany.mobile }} | {{ activeCompany.email }}</p>
+              <p class="text-slate-700 font-semibold mt-1" v-if="activeCompany.gstNo">GST / TIN: {{ activeCompany.gstNo }}</p>
+            </div>
+            <div class="text-right">
+              <h1 class="text-2xl font-extrabold uppercase text-slate-900 tracking-wider">{{ documentTypeName(activePreviewDoc.type) }}</h1>
+              <div class="mt-2 text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 inline-block text-left min-w-[180px]">
+                <p><strong># :</strong> {{ activePreviewDoc.docNumber }}</p>
+                <p><strong>Date:</strong> {{ activePreviewDoc.date }}</p>
+                <p v-if="activePreviewDoc.refNo"><strong>REF:</strong> {{ activePreviewDoc.refNo }}</p>
+                <p v-if="activePreviewDoc.validity"><strong>Validity:</strong> {{ activePreviewDoc.validity }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- RECIPIENT / BILL TO -->
+          <div v-if="activePreviewDoc.type !== 'letters'" class="grid grid-cols-2 gap-4">
+            <div class="border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+              <span class="text-[10px] uppercase font-bold text-slate-400">Customer / Bill To:</span>
+              <h4 class="font-bold text-slate-900 mt-1">{{ activePreviewDoc.customerName }}</h4>
+              <p class="text-slate-600 whitespace-pre-line">{{ activePreviewDoc.customerAddress }}</p>
+              <p class="text-slate-500" v-if="activePreviewDoc.customerMobile">Tel: {{ activePreviewDoc.customerMobile }}</p>
+              <p class="text-slate-500" v-if="activePreviewDoc.customerTin">TIN: {{ activePreviewDoc.customerTin }}</p>
+            </div>
+          </div>
+
+          <!-- OFFICIAL LETTER CONTENT VIEW -->
+          <div v-if="activePreviewDoc.type === 'letters'" class="space-y-4 py-4">
+            <div class="flex justify-between text-xs text-slate-500">
+              <div><strong>Ref:</strong> {{ activePreviewDoc.docNumber }}</div>
+              <div><strong>Date:</strong> {{ activePreviewDoc.date }}</div>
+            </div>
+            <div>
+              <p><strong>To:</strong> {{ activePreviewDoc.to }}</p>
+              <p v-if="activePreviewDoc.cc"><strong>CC:</strong> {{ activePreviewDoc.cc }}</p>
+            </div>
+            <div class="pt-2">
+              <h3 class="font-bold text-sm uppercase underline">Subject: {{ activePreviewDoc.subject }}</h3>
+            </div>
+            <div class="whitespace-pre-line text-slate-800 leading-relaxed py-2">
+              {{ activePreviewDoc.body }}
+            </div>
+          </div>
+
+          <!-- LINE ITEMS TABLE -->
+          <div v-if="activePreviewDoc.items && activePreviewDoc.items.length > 0">
+            <table class="w-full border-collapse text-left">
+              <thead>
+                <tr class="border-y-2 border-slate-800 text-[11px] uppercase font-bold text-slate-700 bg-slate-50">
+                  <th class="py-2 px-2">#</th>
+                  <th class="py-2 px-2">Description</th>
+                  <th class="py-2 px-2 text-center">Qty</th>
+                  <th class="py-2 px-2 text-right" v-if="activePreviewDoc.type !== 'delivery_notes'">Price</th>
+                  <th class="py-2 px-2 text-right" v-if="activePreviewDoc.type !== 'delivery_notes'">Tax</th>
+                  <th class="py-2 px-2 text-right" v-if="activePreviewDoc.type !== 'delivery_notes'">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                <tr v-for="(it, i) in activePreviewDoc.items" :key="i">
+                  <td class="py-2 px-2 font-medium">{{ i + 1 }}</td>
+                  <td class="py-2 px-2 font-medium text-slate-900">{{ it.description }}</td>
+                  <td class="py-2 px-2 text-center">{{ it.qty }}</td>
+                  <td class="py-2 px-2 text-right" v-if="activePreviewDoc.type !== 'delivery_notes'">{{ formatCurrency(it.price) }}</td>
+                  <td class="py-2 px-2 text-right" v-if="activePreviewDoc.type !== 'delivery_notes'">{{ it.taxRate }}%</td>
+                  <td class="py-2 px-2 text-right font-bold" v-if="activePreviewDoc.type !== 'delivery_notes'">
+                    {{ formatCurrency(it.qty * it.price * (1 + (it.taxRate||0)/100)) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TOTALS SUMMARY -->
+          <div v-if="activePreviewDoc.type !== 'delivery_notes' && activePreviewDoc.type !== 'letters'" class="flex justify-end pt-2">
+            <div class="w-64 space-y-1 text-right text-xs">
+              <div class="flex justify-between text-slate-600">
+                <span>Sub Total:</span>
+                <span>{{ formatCurrency(calculatedSubtotal(activePreviewDoc)) }}</span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span>GST / Tax:</span>
+                <span>{{ formatCurrency(calculatedTax(activePreviewDoc)) }}</span>
+              </div>
+              <div class="flex justify-between font-extrabold text-sm text-slate-900 border-t-2 border-slate-800 pt-1">
+                <span>Grand Total:</span>
+                <span>{{ formatCurrency(activePreviewDoc.grandTotal || activePreviewDoc.amountPaid) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TERMS & PAYMENT INSTRUCTIONS -->
+          <div v-if="activePreviewDoc.type !== 'letters'" class="grid grid-cols-2 gap-6 pt-4 border-t border-slate-200">
+            <div>
+              <h5 class="font-bold text-[10px] uppercase text-slate-400">Terms & Conditions</h5>
+              <p class="text-[11px] text-slate-600 whitespace-pre-line mt-1">{{ activePreviewDoc.terms || 'Standard business terms apply.' }}</p>
+            </div>
+            <div>
+              <h5 class="font-bold text-[10px] uppercase text-slate-400">Payment Instructions</h5>
+              <div class="text-[11px] text-slate-700 font-medium mt-1">
+                <p>{{ activeCompany.accountName }}</p>
+                <p>A/C: {{ activeCompany.accountNumber }}</p>
+                <p>{{ activeCompany.bankName }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- AUTHORIZED SIGNATURE FOOTER -->
+          <div class="pt-8 flex justify-between items-end">
+            <div class="text-[10px] text-slate-400">Generated via Company Documents Manager</div>
+            <div class="text-center">
+              <div class="h-12 flex items-center justify-center italic text-slate-400 font-serif text-sm border-b border-slate-300 w-48 mb-1">
+                [ Signature / Seal ]
+              </div>
+              <span class="text-[10px] font-bold uppercase text-slate-600">Authorized Signature</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL FOR ADD EXPENSE -->
+    <div v-if="showExpenseModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4">
+        <h3 class="font-bold text-slate-900">Record New Expense</h3>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Category</label>
+          <select v-model="newExpense.category" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+            <option>Staff Salary</option>
+            <option>Food & Accommodation</option>
+            <option>Electricity Bills</option>
+            <option>Water Bills</option>
+            <option>Rent</option>
+            <option>Repairs & Maintenance</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Amount</label>
+          <input v-model.number="newExpense.amount" type="number" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Description / Notes</label>
+          <input v-model="newExpense.notes" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showExpenseModal = false" class="px-4 py-2 border rounded-xl text-xs">Cancel</button>
+          <button @click="saveExpense" class="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-semibold">Save Expense</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL FOR ADD CUSTOMER -->
+    <div v-if="showCustomerModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4">
+        <h3 class="font-bold text-slate-900">Add Customer</h3>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Company Name</label>
+          <input v-model="newCust.companyName" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Contact Person Name</label>
+          <input v-model="newCust.name" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+          <input v-model="newCust.email" type="email" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Mobile</label>
+          <input v-model="newCust.mobile" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Address</label>
+          <textarea v-model="newCust.address" rows="2" class="w-full text-sm border border-slate-300 rounded-lg p-2.5"></textarea>
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showCustomerModal = false" class="px-4 py-2 border rounded-xl text-xs">Cancel</button>
+          <button @click="saveCustomer" class="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-semibold">Save Customer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL FOR ADD PRODUCT -->
+    <div v-if="showProductModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4">
+        <h3 class="font-bold text-slate-900">Add Product / Item</h3>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Product Name</label>
+          <input v-model="newProd.name" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Price</label>
+            <input v-model.number="newProd.price" type="number" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tax / GST %</label>
+            <input v-model.number="newProd.taxRate" type="number" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">UOM</label>
+            <input v-model="newProd.uom" type="text" placeholder="PCS, KG, SET" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">HSN Code</label>
+            <input v-model="newProd.hsn" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+          </div>
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showProductModal = false" class="px-4 py-2 border rounded-xl text-xs">Cancel</button>
+          <button @click="saveProduct" class="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-semibold">Save Product</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL FOR ADD COMPANY -->
+    <div v-if="showAddCompanyModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4">
+        <h3 class="font-bold text-slate-900">Add New Company</h3>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Company Name</label>
+          <input v-model="newCompName" type="text" placeholder="e.g. Acme Maldives Pvt Ltd" class="w-full text-sm border border-slate-300 rounded-lg p-2.5">
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showAddCompanyModal = false" class="px-4 py-2 border rounded-xl text-xs">Cancel</button>
+          <button @click="createNewCompany" class="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-semibold">Create Company</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- APPLICATION VUE LOGIC -->
+  <script>
+    const { createApp } = Vue;
+
+    // DEFAULT PRE-LOADED SAMPLE DATA FROM SPECIFICATION PDF
+    const initialCompanyData = [
+      {
+        id: 'comp_solekey',
+        name: 'SOLE KEY',
+        contactName: 'MIFTHAAH MAJEED',
+        email: 'sales@solekeygroup.mv',
+        mobile: '9843665',
+        address: 'Reedhoomaage, Ga. Kanduhulhudhoo\nChaandhanee Magu, Maldives',
+        gstNo: '1144840GST501',
+        regNo: 'SP06752023',
+        currency: 'MVR',
+        bankName: 'Bank of Maldives',
+        accountName: 'Sole Key',
+        accountNumber: '7730000799073',
+        prefixes: {
+          quotation: 'QT/SK/2026/',
+          invoice: 'SK-INV/2026/',
+          proforma: 'PI-',
+          po: 'PO-',
+          delivery: 'SK-DN/2026/',
+          receipt: 'RECEIPT-SK/2026/',
+          letter: 'LTR-SK/2026/'
+        },
+        customers: [
+          { id: 'c1', name: 'Purchase Manager', companyName: 'MWSC (Male Water & Sewerage Company)', email: 'mail@mwsc.com.mv', mobile: '332 32090', address: 'Ameenee Magu, Male, Maldives', tin: '1002692GST501' },
+          { id: 'c2', name: 'Procurement Officer', companyName: 'TLT Construction Pvt Ltd', email: 'ltconstr@gmail.com', mobile: '7888219', address: 'M.BEACH FLAT / K.MALE SABUDHELI MAGU, Male', tin: '1101960GST501' }
+        ],
+        products: [
+          { id: 'p1', name: 'Vessel Hire - HYDROCHLORIC ACID (280 CAN X 25 KG)', price: 13888.89, taxRate: 8, uom: 'SET', hsn: '' },
+          { id: 'p2', name: 'Solid Blocks (4")', price: 10.50, taxRate: 8, uom: 'PCS', hsn: '' }
+        ],
+        expenses: [
+          { id: 'e1', date: '2026-10-15', category: 'Staff Salary', amount: 12000, notes: 'October Payroll' },
+          { id: 'e2', date: '2026-10-18', category: 'Rent', amount: 5000, notes: 'Office Rent' }
+        ],
+        documents: [
+          {
+            id: 'doc_1',
+            type: 'quotations',
+            docNumber: 'QT/SK/2026/30',
+            date: '2026-10-23',
+            customerId: 'c1',
+            customerName: 'MWSC (Male Water & Sewerage Company)',
+            customerAddress: 'Ameenee Magu, Male, Maldives',
+            refNo: 'PR 1000001570',
+            validity: '10 Days',
+            status: 'Approved',
+            items: [
+              { description: 'Vessel Hire - HYDROCHLORIC ACID WITH CANE (280 CAN X 25 KG)', qty: 1, price: 13888.89, taxRate: 8 }
+            ],
+            grandTotal: 15000.00,
+            terms: '1. The charterer shall be liable for any damage.\n2. Valid until date specified.'
+          },
+          {
+            id: 'doc_2',
+            type: 'invoices',
+            docNumber: 'SK-INV/2026/9',
+            date: '2026-10-22',
+            customerId: 'c2',
+            customerName: 'TLT Construction Pvt Ltd',
+            customerAddress: 'M.BEACH FLAT / K.MALE SABUDHELI MAGU',
+            status: 'Paid',
+            items: [
+              { description: 'Solid Blocks (4")', qty: 500, price: 10.50, taxRate: 8 }
+            ],
+            grandTotal: 5670.00,
+            terms: '1. Goods must be inspected on delivery.'
+          }
+        ]
+      }
+    ];
+
+    createApp({
+      data() {
+        return {
+          isAuthenticated: false,
+          pinInput: '',
+          loginError: '',
+          currentView: 'dashboard',
+          selectedFiscalYear: '2026',
+          companies: JSON.parse(localStorage.getItem('docman_companies')) || initialCompanyData,
+          activeCompanyId: 'comp_solekey',
+
+          // Modals state
+          showDocModal: false,
+          showPreviewModal: false,
+          showExpenseModal: false,
+          showCustomerModal: false,
+          showProductModal: false,
+          showAddCompanyModal: false,
+
+          // Active Document for Preview
+          activePreviewDoc: {},
+
+          // Forms
+          newDoc: {
+            type: 'quotations',
+            customerId: '',
+            customerName: '',
+            customerAddress: '',
+            customerMobile: '',
+            customerTin: '',
+            date: new Date().toISOString().slice(0, 10),
+            refNo: '',
+            validity: '',
+            poNumber: '',
+            paymentMethod: 'Bank',
+            paymentRef: '',
+            amountPaid: 0,
+            status: 'Approved',
+            items: [],
+            terms: '',
+            to: '',
+            cc: '',
+            subject: '',
+            body: ''
+          },
+
+          newExpense: { category: 'Staff Salary', amount: 0, notes: '' },
+          newCust: { name: '', companyName: '', email: '', mobile: '', address: '', tin: '' },
+          newProd: { name: '', price: 0, taxRate: 8, uom: 'PCS', hsn: '' },
+          newCompName: ''
+        }
+      },
+      computed: {
+        activeCompany() {
+          return this.companies.find(c => c.id === this.activeCompanyId) || this.companies[0] || {};
+        },
+        currentCompany() {
+          return this.activeCompany;
+        },
+        financials() {
+          const docs = this.activeCompany.documents || [];
+          const exps = this.activeCompany.expenses || [];
+
+          // Revenue (Invoices & Receipts)
+          const sales = docs
+            .filter(d => ['invoices', 'receipts'].includes(d.type) && d.status !== 'Cancelled')
+            .reduce((sum, d) => sum + (d.grandTotal || d.amountPaid || 0), 0);
+
+          // Cost of Sales (Purchase Orders)
+          const costOfSales = docs
+            .filter(d => d.type === 'purchase_orders')
+            .reduce((sum, d) => sum + (d.grandTotal || 0), 0);
+
+          const grossProfit = sales - costOfSales;
+
+          // Expenses breakdown
+          const expenseBreakdown = {};
+          let totalExpenses = 0;
+          exps.forEach(e => {
+            expenseBreakdown[e.category] = (expenseBreakdown[e.category] || 0) + (e.amount || 0);
+            totalExpenses += (e.amount || 0);
+          });
+
+          return {
+            sales,
+            costOfSales,
+            grossProfit,
+            expenses: totalExpenses,
+            expenseBreakdown,
+            netProfit: grossProfit - totalExpenses
+          }
+        },
+        calculatedTotal() {
+          if (this.newDoc.type === 'receipts') return this.newDoc.amountPaid || 0;
+          return this.newDoc.items.reduce((acc, it) => {
+            const sub = (it.qty || 0) * (it.price || 0);
+            return acc + (sub * (1 + (it.taxRate || 0)/100));
+          }, 0);
+        }
+      },
+      watch: {
+        companies: {
+          handler(val) {
+            localStorage.setItem('docman_companies', JSON.stringify(val));
+          },
+          deep: true
+        }
+      },
+      mounted() {
+        lucide.createIcons();
+      },
+      updated() {
+        lucide.createIcons();
+      },
+      methods: {
+        verifyPin() {
+          if (this.pinInput === '1234') {
+            this.isAuthenticated = true;
+            this.loginError = '';
+          } else {
+            this.loginError = 'Invalid PIN. (Use 1234)';
+          }
+        },
+        navClass(view) {
+          return this.currentView === view
+            ? 'bg-brand-600 text-white font-semibold'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+        },
+        documentTypeName(type) {
+          const names = {
+            quotations: 'Quotation',
+            invoices: 'Invoice',
+            proformas: 'Proforma Invoice',
+            purchase_orders: 'Purchase Order',
+            delivery_notes: 'Delivery Note',
+            receipts: 'Receipt',
+            letters: 'Official Letter'
+          };
+          return names[type] || 'Document';
+        },
+        activeDocs(type) {
+          return (this.activeCompany.documents || []).filter(d => d.type === type);
+        },
+        statusBadgeClass(status) {
+          if (['Paid', 'Approved'].includes(status)) return 'bg-emerald-100 text-emerald-800';
+          if (['In-Progress', 'Partially Paid'].includes(status)) return 'bg-amber-100 text-amber-800';
+          return 'bg-slate-100 text-slate-800';
+        },
+        formatCurrency(val) {
+          return (this.activeCompany.currency || 'MVR') + ' ' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        openCreateModal(type) {
+          const count = this.activeDocs(type).length + 1;
+          const prefix = this.activeCompany.prefixes[type] || 'DOC-';
+          this.newDoc = {
+            id: 'doc_' + Date.now(),
+            type,
+            docNumber: prefix + count,
+            date: new Date().toISOString().slice(0, 10),
+            customerId: '',
+            customerName: '',
+            customerAddress: '',
+            customerMobile: '',
+            customerTin: '',
+            refNo: '',
+            validity: '10 Days',
+            poNumber: '',
+            paymentMethod: 'Bank',
+            paymentRef: '',
+            amountPaid: 0,
+            status: 'Approved',
+            items: [{ productId: '', description: '', qty: 1, price: 0, taxRate: 8 }],
+            terms: '1. Goods once sold will not be returned.\n2. Payment strictly upon receipt.',
+            to: '',
+            cc: '',
+            subject: '',
+            body: ''
+          };
+          this.showDocModal = true;
+        },
+        onCustomerSelect() {
+          const cust = this.activeCompany.customers.find(c => c.id === this.newDoc.customerId);
+          if (cust) {
+            this.newDoc.customerName = cust.companyName || cust.name;
+            this.newDoc.customerAddress = cust.address;
+            this.newDoc.customerMobile = cust.mobile;
+            this.newDoc.customerTin = cust.tin;
+          }
+        },
+        onProductSelect(item) {
+          const prod = this.activeCompany.products.find(p => p.id === item.productId);
+          if (prod) {
+            item.description = prod.name;
+            item.price = prod.price;
+            item.taxRate = prod.taxRate;
+          }
+        },
+        addLineItem() {
+          this.newDoc.items.push({ productId: '', description: '', qty: 1, price: 0, taxRate: 8 });
+        },
+        removeLineItem(idx) {
+          this.newDoc.items.splice(idx, 1);
+        },
+        saveDocument() {
+          this.newDoc.grandTotal = this.calculatedTotal;
+          this.activeCompany.documents.unshift({ ...this.newDoc });
+          this.showDocModal = false;
+        },
+        deleteDoc(id) {
+          this.activeCompany.documents = this.activeCompany.documents.filter(d => d.id !== id);
+        },
+        previewDocument(doc) {
+          this.activePreviewDoc = doc;
+          this.showPreviewModal = true;
+        },
+        triggerPrint() {
+          window.print();
+        },
+        convertQuotationToInvoice(doc) {
+          const newInv = JSON.parse(JSON.stringify(doc));
+          newInv.id = 'doc_' + Date.now();
+          newInv.type = 'invoices';
+          newInv.docNumber = (this.activeCompany.prefixes.invoice || 'INV-') + (this.activeDocs('invoices').length + 1);
+          newInv.status = 'In-Progress';
+          this.activeCompany.documents.unshift(newInv);
+          this.currentView = 'invoices';
+        },
+        generateReceiptFromInvoice(doc) {
+          const newRec = {
+            id: 'doc_' + Date.now(),
+            type: 'receipts',
+            docNumber: (this.activeCompany.prefixes.receipt || 'REC-') + (this.activeDocs('receipts').length + 1),
+            date: new Date().toISOString().slice(0, 10),
+            customerName: doc.customerName,
+            customerAddress: doc.customerAddress,
+            amountPaid: doc.grandTotal,
+            paymentMethod: 'Bank',
+            paymentRef: 'FT-' + Math.floor(100000 + Math.random() * 900000),
+            status: 'Paid',
+            terms: 'Payment Received with Thanks.'
+          };
+          this.activeCompany.documents.unshift(newRec);
+          this.currentView = 'receipts';
+        },
+        calculatedSubtotal(doc) {
+          if (!doc.items) return 0;
+          return doc.items.reduce((acc, i) => acc + (i.qty * i.price), 0);
+        },
+        calculatedTax(doc) {
+          if (!doc.items) return 0;
+          return doc.items.reduce((acc, i) => acc + (i.qty * i.price * ((i.taxRate || 0)/100)), 0);
+        },
+        saveExpense() {
+          this.activeCompany.expenses.unshift({ id: 'e_' + Date.now(), date: new Date().toISOString().slice(0, 10), ...this.newExpense });
+          this.showExpenseModal = false;
+          this.newExpense = { category: 'Staff Salary', amount: 0, notes: '' };
+        },
+        saveCustomer() {
+          this.activeCompany.customers.push({ id: 'c_' + Date.now(), ...this.newCust });
+          this.showCustomerModal = false;
+          this.newCust = { name: '', companyName: '', email: '', mobile: '', address: '', tin: '' };
+        },
+        saveProduct() {
+          this.activeCompany.products.push({ id: 'p_' + Date.now(), ...this.newProd });
+          this.showProductModal = false;
+          this.newProd = { name: '', price: 0, taxRate: 8, uom: 'PCS', hsn: '' };
+        },
+        createNewCompany() {
+          if (!this.newCompName) return;
+          const newComp = {
+            id: 'comp_' + Date.now(),
+            name: this.newCompName,
+            currency: 'MVR',
+            prefixes: { quotation: 'QT/', invoice: 'INV/', proforma: 'PI/', po: 'PO/', delivery: 'DN/', receipt: 'REC/', letter: 'LTR/' },
+            customers: [],
+            products: [],
+            expenses: [],
+            documents: []
+          };
+          this.companies.push(newComp);
+          this.activeCompanyId = newComp.id;
+          this.showAddCompanyModal = false;
+          this.newCompName = '';
+        },
+        saveSettings() {
+          alert('Company settings updated successfully!');
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
